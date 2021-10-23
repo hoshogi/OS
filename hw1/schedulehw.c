@@ -115,7 +115,7 @@ void pushReadyQueue(int pid) {
 	readyQueue.prev = &procTable[pid];
 	readyQueue.len++;
 
-	printf("pushReadyQueue, id = %d, reayQueue.len = %d\n", pid, readyQueue.len);
+	// printf("pushReadyQueue, id = %d, reayQueue.len = %d\n", pid, readyQueue.len);
  }
 
 struct process* popReadyQueue(int pid) {
@@ -128,7 +128,7 @@ struct process* popReadyQueue(int pid) {
 			iter->prev = NULL;
 			iter->next = NULL;
 			readyQueue.len--;
-			printf("popReadyQueue, id = %d, reayQueue.len = %d\n", iter->id, readyQueue.len);
+			// printf("popReadyQueue, id = %d, reayQueue.len = %d\n", iter->id, readyQueue.len);
 			return iter;
 		}
 		iter = iter->next;
@@ -144,7 +144,7 @@ void pushBlockedQueue(int pid) {
 	procTable[pid].next = &blockedQueue;
 
 	blockedQueue.len++;
-	printf("pushBlockedQueue, id = %d, blockedQueue.len = %d\n", pid, blockedQueue.len);
+	// printf("pushBlockedQueue, id = %d, blockedQueue.len = %d\n", pid, blockedQueue.len);
 }
 
 struct process* popBlockedQueue(int pid) {
@@ -157,7 +157,7 @@ struct process* popBlockedQueue(int pid) {
 			iter->prev = NULL;
 			iter->next = NULL;
 			blockedQueue.len--;
-			printf("popBlockedQueue, id = %d, blockedQueue.len = %d\n", pid, blockedQueue.len);
+			// printf("popBlockedQueue, id = %d, blockedQueue.len = %d\n", pid, blockedQueue.len);
 			return iter;
 		}  
 		iter = iter->next;
@@ -195,7 +195,7 @@ void pushIoDoneEventQueue(int nioreq) {
 		
 	}
 	ioDoneEventQueue.len++;
-	printf("pushIoDoneEventQueue, id = %d, ioDoneEventQueue.len = %d, donetime = %d\n", ioDoneEvent[nioreq].procid, ioDoneEventQueue.len, ioDoneEvent[nioreq].doneTime);
+	// printf("pushIoDoneEventQueue, id = %d, ioDoneEventQueue.len = %d, donetime = %d\n", ioDoneEvent[nioreq].procid, ioDoneEventQueue.len, ioDoneEvent[nioreq].doneTime);
 }
 
 void popIoDoneEventQueue() {
@@ -206,7 +206,7 @@ void popIoDoneEventQueue() {
 	ioDoneEventIter->prev = NULL;
 	ioDoneEventIter->next = NULL;
 	ioDoneEventQueue.len--;
-	printf("popIoDoneEventQueue, id = %d, ioDoneEventQueue.len = %d, ioDoneEventQueue.next->doneTime = %d\n", ioDoneEventIter->procid, ioDoneEventQueue.len, ioDoneEventQueue.next->doneTime);
+	// printf("popIoDoneEventQueue, id = %d, ioDoneEventQueue.len = %d, ioDoneEventQueue.next->doneTime = %d\n", ioDoneEventIter->procid, ioDoneEventQueue.len, ioDoneEventQueue.next->doneTime);
 }
 
 void procExecSim(struct process *(*scheduler)()) {
@@ -225,7 +225,7 @@ void procExecSim(struct process *(*scheduler)()) {
 		currentTime++;
 		qTime++;
 
-		printf("currentTime = %d, qTime = %d\n", currentTime, qTime);
+		// printf("currentTime = %d, qTime = %d\n", currentTime, qTime);
 
 		runningProc->serviceTime++;
 		if (runningProc != &idleProc) cpuUseTime++;
@@ -235,7 +235,7 @@ void procExecSim(struct process *(*scheduler)()) {
 		compute(); 
 	
 		if (currentTime == nextForkTime) { /* CASE 2 : a new process created */
-			printf("프로세스 생성 발생 id: %d\n", nproc);
+			// printf("프로세스 생성 발생 id: %d\n", nproc);
 			nextState = S_READY;	
 			procTable[nproc].startTime = currentTime;
 			pushReadyQueue(nproc);
@@ -245,14 +245,14 @@ void procExecSim(struct process *(*scheduler)()) {
 			schedule = 1;
 		}
 		if (qTime == QUANTUM ) { /* CASE 1 : The quantum expires */
-			printf("퀀텀 만료 발생\n");
+			// printf("퀀텀 만료 발생\n");
 			nextState = S_READY;
 			schedule = 1;
 			
 			// Simple Feedback Scheduling Algorithm에서는 runningProc의 priority 수정 필요하다 -> priority 감소
 		}
 		while (ioDoneEventQueue.next->doneTime == currentTime) { /* CASE 3 : IO Done Event */
-			printf("IO Done Event 발생!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+			// printf("IO Done Event 발생!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 
 			nextState = S_READY;
 			pid = ioDoneEventQueue.next->procid;
@@ -268,7 +268,7 @@ void procExecSim(struct process *(*scheduler)()) {
 		}
 		if (cpuUseTime == nextIOReqTime) { /* CASE 5: reqest IO operations (only when the process does not terminate) */
 			if (runningProc != &idleProc) {
-				printf("ioRequest 발생\n");
+				// printf("ioRequest 발생\n");
 				nextState = S_BLOCKED;
 				ioDoneEvent[nioreq].procid = runningProc->id;
 				ioDoneEvent[nioreq].doneTime = currentTime + ioServTime[nioreq];
@@ -297,7 +297,7 @@ void procExecSim(struct process *(*scheduler)()) {
 				runningProc->state = S_TERMINATE;
 				runningProc->endTime = currentTime;
 				termProc++;
-				printf("terminated, id = %d, termProc = %d\n", runningProc->id, termProc);
+				// printf("terminated, id = %d, termProc = %d\n", runningProc->id, termProc);
 			}
 		}
 		
@@ -307,7 +307,7 @@ void procExecSim(struct process *(*scheduler)()) {
 			runningProc->saveReg1 = cpuReg1;
 			
 			runningProc = scheduler();
-			printf("scheduler, running process id : %d \n", runningProc->id);
+			// printf("scheduler, running process id : %d \n", runningProc->id);
 
 			if (runningProc == &idleProc) {
 				nextState = S_IDLE;
@@ -339,34 +339,60 @@ struct process* RRschedule() {
 struct process* SJFschedule() {
 	int minTargetServTime = INT_MAX;
 	int pid = -1;
+	struct process* iter = readyQueue.next;
 
 	if (readyQueue.len == 0) {
 		return &idleProc;
 	}
 	else {
-
+		while(iter != &readyQueue) {
+			if (iter->targetServiceTime < minTargetServTime) {
+				minTargetServTime = iter->targetServiceTime;
+				pid = iter->id;
+			}
+			iter = iter->next;
+		}
+		return popReadyQueue(pid);
 	}
 }
 
 struct process* SRTNschedule() {
+	int minRemainingTime = INT_MAX;
+	int pid = -1;
+	struct process* iter = readyQueue.next;
 
-	
 	if (readyQueue.len == 0) {
 		return &idleProc;
 	}
 	else {
-		
+		while(iter != &readyQueue) {
+			if ((iter->targetServiceTime - iter->serviceTime) < minRemainingTime) {
+				minRemainingTime = iter->targetServiceTime - iter->serviceTime;
+				pid = iter->id;
+			}
+			iter = iter->next;
+		}
+		return popReadyQueue(pid);
 	}
 }
 
 struct process* GSschedule() {
-
+	double minRatio = 2.0;
+	int pid = -1;
+	struct process* iter = readyQueue.next;
 
 	if (readyQueue.len == 0) {
 		return &idleProc;
 	}
 	else {
-		
+		while(iter != &readyQueue) {
+			if (((double)iter->serviceTime / (double)iter->targetServiceTime) < minRatio) {
+				minRatio = (double)iter->serviceTime / (double)iter->targetServiceTime;
+				pid = iter->id;
+			}
+			iter = iter->next;
+		}
+		return popReadyQueue(pid);
 	}
 }
 
