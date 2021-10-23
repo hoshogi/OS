@@ -62,6 +62,7 @@ void compute() {
 
 void initProcTable() {
 	int i;
+	
 	for(i=0; i < NPROC; i++) {
 		procTable[i].id = i;
 		procTable[i].len = 0;
@@ -79,7 +80,7 @@ void initProcTable() {
 }
 
 void initIdleProc() {
-	idleProc.id = -1;
+	idleProc.id = 0;
 	idleProc.len = 0;
 	idleProc.targetServiceTime = -1;
 	idleProc.serviceTime = 0;
@@ -114,7 +115,7 @@ void pushReadyQueue(int pid) {
 	readyQueue.prev = &procTable[pid];
 
 	readyQueue.len++;
-	printf("pushReadyQueue, reayQueue.len = %d\n", readyQueue.len);
+	printf("pushReadyQueue, id = %d, reayQueue.len = %d\n", pid, readyQueue.len);
  }
 
 struct process* popReadyQueue(int pid) {
@@ -127,7 +128,7 @@ struct process* popReadyQueue(int pid) {
 			iter->prev = NULL;
 			iter->next = NULL;
 			readyQueue.len--;
-			printf("popReadyQueue, reayQueue.len = %d, pid = %d\n", readyQueue.len, iter->id);
+			printf("popReadyQueue, id = %d, reayQueue.len = %d\n", iter->id, readyQueue.len);
 			return iter;
 		}
 		iter = iter->next;
@@ -143,6 +144,7 @@ void pushBlockedQueue(int pid) {
 	procTable[pid].next = &blockedQueue;
 
 	blockedQueue.len++;
+	printf("pushBlockedQueue, id = %d, blockedQueue.len = %d\n", pid, blockedQueue.len);
 }
 
 struct process* popBlockedQueue(int pid) {
@@ -155,6 +157,7 @@ struct process* popBlockedQueue(int pid) {
 			iter->prev = NULL;
 			iter->next = NULL;
 			blockedQueue.len--;
+			printf("popBlockedQueue, id = %d, blockedQueue.len = %d\n", pid, blockedQueue.len);
 			return iter;
 		}  
 		iter = iter->next;
@@ -162,22 +165,40 @@ struct process* popBlockedQueue(int pid) {
 }
 
 void pushIoDoneEventQueue(int nioreq) {
-	struct ioDoneEvent *iter = ioDoneEventQueue.next;
+	struct ioDoneEvent* iter = ioDoneEventQueue.next;
 
-	while (iter != &ioDoneEventQueue) {
-		if (ioDoneEvent[nioreq].doneTime < iter->doneTime) {
-			iter->prev->next = &ioDoneEvent[nioreq];
-			ioDoneEvent[nioreq].prev = iter->prev;
-			ioDoneEvent[nioreq].next = iter;
-			iter->prev = &ioDoneEvent[nioreq];
-			ioDoneEventQueue.len++;
-			return;
-		}
-		iter = iter->next;
+	if (ioDoneEventQueue.len == 0) {
+		ioDoneEventQueue.prev = &ioDoneEvent[nioreq];
+		ioDoneEventQueue.next = &ioDoneEvent[nioreq];
+		ioDoneEvent[nioreq].prev = &ioDoneEventQueue;
+		ioDoneEvent[nioreq].next = &ioDoneEventQueue;
 	}
+	else {
+		if (ioDoneEvent[nioreq].doneTime >= ioDoneEventQueue.prev->doneTime) {
+			ioDoneEventQueue.prev->next = &ioDoneEvent[nioreq];
+			ioDoneEvent[nioreq].prev = ioDoneEventQueue.prev;
+			ioDoneEventQueue.prev = &ioDoneEvent[nioreq];
+			ioDoneEvent[nioreq].next = &ioDoneEventQueue;
+		}
+		else {
+			while (iter != &ioDoneEventQueue) {
+				if (ioDoneEvent[nioreq].doneTime < iter->doneTime) {
+					iter->prev->next = &ioDoneEvent[nioreq];
+					ioDoneEvent[nioreq].prev = iter->prev;
+					ioDoneEvent[nioreq].next = iter;
+					iter->prev = &ioDoneEvent[nioreq];				
+					break;
+				}
+				iter = iter->next;
+			}
+		}
+		
+	}
+	ioDoneEventQueue.len++;
+	printf("pushIoDoneEventQueue, id = %d, ioDoneEventQueue.len = %d, donetime = %d\n", ioDoneEvent[nioreq].procid, ioDoneEventQueue.len, ioDoneEvent[nioreq].doneTime);
 }
 
-struct ioDoneEvent popIoDoneEventQueue() {
+void popIoDoneEventQueue() {
 	struct ioDoneEvent* ioDoneEventIter = ioDoneEventQueue.next;
 
 	ioDoneEventQueue.next = ioDoneEventIter->next;
@@ -185,6 +206,7 @@ struct ioDoneEvent popIoDoneEventQueue() {
 	ioDoneEventIter->prev = NULL;
 	ioDoneEventIter->next = NULL;
 	ioDoneEventQueue.len--;
+	printf("popIoDoneEventQueue, id = %d, ioDoneEventQueue.len = %d, ioDoneEventQueue.next->doneTime = %d\n", ioDoneEventIter->procid, ioDoneEventQueue.len, ioDoneEventQueue.next->doneTime);
 }
 
 void procExecSim(struct process *(*scheduler)()) {
@@ -198,20 +220,22 @@ void procExecSim(struct process *(*scheduler)()) {
 	initIdleProc();
 	initIoDoneEvent();
 	runningProc = &idleProc;
-	cpuReg0 = 0, cpuReg1 = 0;
 
 	while(1) {
 		currentTime++;
 		qTime++;
 
+		printf("currentTime = %d, qTime = %d\n", currentTime, qTime);
+
 		runningProc->serviceTime++;
 		if (runningProc != &idleProc) cpuUseTime++;
-
+		
+	
 		// MUST CALL compute() Inside While loop
 		compute(); 
 	
 		if (currentTime == nextForkTime) { /* CASE 2 : a new process created */
-			printf("프로세스 생성 발생 pid: %d\n", nproc);
+			printf("프로세스 생성 발생 id: %d\n", nproc);
 			nextState = S_READY;	
 			procTable[nproc].startTime = currentTime;
 			pushReadyQueue(nproc);
@@ -273,38 +297,34 @@ void procExecSim(struct process *(*scheduler)()) {
 				runningProc->state = S_TERMINATE;
 				runningProc->endTime = currentTime;
 				termProc++;
+				printf("terminated, id = %d, termProc = %d\n", runningProc->id, termProc);
 			}
 		}
-
-		printf("termProc 개수 : %d\n", termProc);
-		if (termProc == 4) {
-			break;
-		}
-	
 		
 		// call scheduler() if needed
 		if(schedule) {
-			// if (runningProc != &idleProc) {
-			// 	runningProc->saveReg0 = cpuReg0;
-			// 	runningProc->saveReg1 = cpuReg1;
-			// }
+			runningProc->saveReg0 = cpuReg0;
+			runningProc->saveReg1 = cpuReg1;
 			
-			printf("스케쥴러 호출 전 \n");
 			runningProc = scheduler();
-			printf("스케쥴러 호출 후 running process id : %d \n", runningProc->id);
+			printf("scheduler, running process id : %d \n", runningProc->id);
 
 			if (runningProc == &idleProc) {
 				nextState = S_IDLE;
 			}
 			else {
 				runningProc->state = S_RUNNING;
-				// cpuReg0 = runningProc->saveReg0;
-				// cpuReg1 = runningProc->saveReg1;
 				nextState = S_RUNNING;
+				cpuReg0 = runningProc->saveReg0;
+				cpuReg1 = runningProc->saveReg1;
 			}
 			schedule = 0;
 			qTime = 0;
 		}	
+
+		if (termProc == NPROC) {
+			break;
+		}
 	} // while loop
 }
 
