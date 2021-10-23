@@ -80,7 +80,7 @@ void initProcTable() {
 }
 
 void initIdleProc() {
-	idleProc.id = 0;
+	idleProc.id = -1;
 	idleProc.len = 0;
 	idleProc.targetServiceTime = -1;
 	idleProc.serviceTime = 0;
@@ -113,8 +113,8 @@ void pushReadyQueue(int pid) {
 	procTable[pid].prev = readyQueue.prev;
 	procTable[pid].next = &readyQueue;
 	readyQueue.prev = &procTable[pid];
-
 	readyQueue.len++;
+
 	printf("pushReadyQueue, id = %d, reayQueue.len = %d\n", pid, readyQueue.len);
  }
 
@@ -322,33 +322,63 @@ void procExecSim(struct process *(*scheduler)()) {
 			qTime = 0;
 		}	
 
-		if (termProc == NPROC) {
+		if (termProc == NPROC) 
 			break;
-		}
+
 	} // while loop
 }
 
 //RR,SJF(Modified),SRTN,Guaranteed Scheduling(modified),Simple Feed Back Scheduling
 struct process* RRschedule() {
-	int pid;
+	if (readyQueue.len == 0) 
+		return &idleProc;
+	else 
+		return popReadyQueue(readyQueue.next->id);
+}
+
+struct process* SJFschedule() {
+	int minTargetServTime = INT_MAX;
+	int pid = -1;
 
 	if (readyQueue.len == 0) {
 		return &idleProc;
 	}
 	else {
-		pid = readyQueue.next->id;
-		popReadyQueue(pid);
-		return &procTable[pid];
+
 	}
 }
 
-struct process* SJFschedule() {
-}
 struct process* SRTNschedule() {
+
+	
+	if (readyQueue.len == 0) {
+		return &idleProc;
+	}
+	else {
+		
+	}
 }
+
 struct process* GSschedule() {
+
+
+	if (readyQueue.len == 0) {
+		return &idleProc;
+	}
+	else {
+		
+	}
 }
+
 struct process* SFSschedule() {
+
+
+	if (readyQueue.len == 0) {
+		return &idleProc;
+	}
+	else {
+		
+	}
 }
 
 void printResult() {
@@ -496,4 +526,5 @@ int main(int argc, char *argv[]) {
 	initProcTable();
 	procExecSim(schFunc);
 	printResult();
+
 }
