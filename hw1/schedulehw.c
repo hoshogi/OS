@@ -186,7 +186,6 @@ void pushIoDoneEventQueue(int nioreq) {
 				iter = iter->next;
 			}
 		}
-		
 	}
 	ioDoneEventQueue.len++;
 }
@@ -199,7 +198,6 @@ void popIoDoneEventQueue() {
 	ioDoneEventIter->prev = NULL;
 	ioDoneEventIter->next = NULL;
 	ioDoneEventQueue.len--;
-	// printf("popIoDoneEventQueue, id = %d, ioDoneEventQueue.len = %d, ioDoneEventQueue.next->doneTime = %d\n", ioDoneEventIter->procid, ioDoneEventQueue.len, ioDoneEventQueue.next->doneTime);
 }
 
 void procExecSim(struct process *(*scheduler)()) {
@@ -212,6 +210,7 @@ void procExecSim(struct process *(*scheduler)()) {
 
 	initIdleProc();
 	initIoDoneEvent();
+
 	runningProc = &idleProc;
 
 	while(1) {
@@ -225,9 +224,9 @@ void procExecSim(struct process *(*scheduler)()) {
 		compute(); 
 	
 		if (currentTime == nextForkTime) { /* CASE 2 : a new process created */
-			// printf("프로세스 생성 발생 id: %d\n", nproc);
 			nextState = S_READY;	
 			procTable[nproc].startTime = currentTime;
+
 			pushReadyQueue(nproc);
 			
 			nproc++;
@@ -236,29 +235,24 @@ void procExecSim(struct process *(*scheduler)()) {
 		}
 		if (qTime == QUANTUM ) { /* CASE 1 : The quantum expires */
 			nextState = S_READY;
+
 			if (runningProc != &idleProc)
 				runningProc->priority--;
 			schedule = 1;
-			// Simple Feedback Scheduling Algorithm에서는 runningProc의 priority 수정 필요하다 -> priority 감소
 		}
 		while (ioDoneEventQueue.next->doneTime == currentTime) { /* CASE 3 : IO Done Event */
-			// printf("IO Done Event 발생!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-
 			nextState = S_READY;
 			pid = ioDoneEventQueue.next->procid;
 
 			popIoDoneEventQueue();
 			popBlockedQueue(pid);
 
-			if (procTable[pid].state != S_TERMINATE) {
+			if (procTable[pid].state != S_TERMINATE) 
 				pushReadyQueue(pid);
-			}
-
 			schedule = 1;
 		}
 		if (cpuUseTime == nextIOReqTime) { /* CASE 5: reqest IO operations (only when the process does not terminate) */
 			if (runningProc != &idleProc) {
-				// printf("ioRequest 발생\n");
 				nextState = S_BLOCKED;
 				ioDoneEvent[nioreq].procid = runningProc->id;
 				ioDoneEvent[nioreq].doneTime = currentTime + ioServTime[nioreq];
@@ -269,7 +263,6 @@ void procExecSim(struct process *(*scheduler)()) {
 				nextIOReqTime += ioReqIntArrTime[nioreq];
 				if (qTime != QUANTUM )
 					runningProc->priority++;
-
 				schedule = 1;
 			}
 		}
@@ -289,7 +282,6 @@ void procExecSim(struct process *(*scheduler)()) {
 				runningProc->state = S_TERMINATE;
 				runningProc->endTime = currentTime;
 				termProc++;
-				// printf("terminated, id = %d, termProc = %d\n", runningProc->id, termProc);
 			}
 		}
 		
@@ -299,7 +291,6 @@ void procExecSim(struct process *(*scheduler)()) {
 			runningProc->saveReg1 = cpuReg1;
 			
 			runningProc = scheduler();
-			// printf("scheduler, running process id : %d \n", runningProc->id);
 
 			if (runningProc == &idleProc) {
 				nextState = S_IDLE;
@@ -329,7 +320,7 @@ struct process* RRschedule() {
 }
 
 struct process* SJFschedule() {
-	int minTargetServTime = INT_MAX;
+	int minTargetServiceTime = INT_MAX;
 	int pid = -1;
 	struct process* iter = readyQueue.next;
 
@@ -338,8 +329,8 @@ struct process* SJFschedule() {
 	}
 	else {
 		while(iter != &readyQueue) {
-			if (iter->targetServiceTime < minTargetServTime) {
-				minTargetServTime = iter->targetServiceTime;
+			if (iter->targetServiceTime < minTargetServiceTime) {
+				minTargetServiceTime = iter->targetServiceTime;
 				pid = iter->id;
 			}
 			iter = iter->next;
