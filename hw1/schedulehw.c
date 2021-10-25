@@ -208,9 +208,6 @@ void procExecSim(struct process *(*scheduler)()) {
 	nextForkTime = procIntArrTime[nproc];
 	nextIOReqTime = ioReqIntArrTime[nioreq];
 
-	initIdleProc();
-	initIoDoneEvent();
-
 	runningProc = &idleProc;
 
 	while(1) {
@@ -307,7 +304,6 @@ void procExecSim(struct process *(*scheduler)()) {
 
 		if (termProc == NPROC) 
 			break;
-
 	} // while loop
 }
 
@@ -426,7 +422,6 @@ void printResult() {
 	printf("Avg IOReq Inter Arrival Time : %g \tAverage IOReq Service Time : %g\n", (float) totalIOReqIntArrTime/NIOREQ, (float) totalIOServTime/NIOREQ);
 	printf("%d Process processed with %d IO requests\n", NPROC,NIOREQ);
 	printf("Average Wall Clock Service Time : %g \tAverage Two Register Sum Value %g\n", (float) totalWallTime/NPROC, (float) totalRegValue/NPROC);
-	
 }
 
 int main(int argc, char *argv[]) {
@@ -542,7 +537,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	initProcTable();
+	initIdleProc();
+	initIoDoneEvent();
 	procExecSim(schFunc);
 	printResult();
-
 }
