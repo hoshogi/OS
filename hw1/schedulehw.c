@@ -365,8 +365,8 @@ struct process* GSschedule() {
 	}
 	else {
 		while(iter != &readyQueue) {
-			if (((double)iter->serviceTime / (double)iter->targetServiceTime) < minRatio) {
-				minRatio = (double)iter->serviceTime / (double)iter->targetServiceTime;
+			if (((double)iter->serviceTime / iter->targetServiceTime) < minRatio) {
+				minRatio = (double)iter->serviceTime / iter->targetServiceTime;
 				pid = iter->id;
 			}
 			iter = iter->next;
