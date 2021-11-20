@@ -14,7 +14,7 @@
 #define PAGESIZEBITS 12			// page size = 4Kbytes
 #define VIRTUALADDRBITS 32		// virtual address space size = 4Gbytes
 
-#define VIRTUALADDRESSNUM 10000000000
+#define VIRTUALADDRESSNUM 1000000
 
 int numProcess;
 int nFrame;
@@ -76,37 +76,39 @@ void initProcTable() {
 	}
 }
 
-void initFirstLevelPageTable() {
-	int i, j;
+void initPageTable() {
+	int i;
 
 	for (i = 0; i < numProcess; i++) {
 		for (j = 0; j < (1L << 20); j++) {
-			procTable[i].firstLevelPageTable[j].valid = 0;
-			procTable[i].firstLevelPageTable[j].frameNum = 0;
-			procTable[i].firstLevelPageTable[j].next = NULL;
+			procTable[i].pageTable[j].valid = 0;
+			procTable[i].pageTable[j].frameNum = 0;
+			procTable[i].pageTable[j].len = 0;
+			procTable[i].pageTable[j].next = NULL;
+			procTable[i].pageTable[j].tail = NULL;
 		}
 	}
 }
 
 void pushFifoQueue(int procNum, int pageNum, int frameNum) {
-	procTable[procNum].firstLevelPageTable[pageNum].valid = 1;
-	procTable[procNum].firstLevelPageTable[pageNum].frameNum = frameNum;
+	procTable[procNum].pageTable[pageNum].valid = 1;
+	procTable[procNum].pageTable[pageNum].frameNum = frameNum;
 
 	if (fifoQueue.len == 0) {
-		fifoQueue.head = fifoQueue.tail = &procTable[procNum].firstLevelPageTable[pageNum];
+		fifoQueue.next = fifoQueue.tail = &procTable[procNum].pageTable[pageNum];
 	}
 	else {
-		fifoQueue.tail->next = &procTable[procNum].firstLevelPageTable[pageNum];
-		fifoQueue.tail = &procTable[procNum].firstLevelPageTable[pageNum];
+		fifoQueue.tail->next = &procTable[procNum].pageTable[pageNum];
+		fifoQueue.tail = &procTable[procNum].pageTable[pageNum];
 	}
 	fifoQueue.len++;
 }
 
-popFifoQueue() {
+void popFifoQueue() {
 	struct pageTableEntry* iter;
 
-	iter = fifoQueue.head;
-	fifoQueue.head = fifoQueue.head->next;
+	iter = fifoQueue.next;
+	fifoQueue.next = iter->next;
 	iter->next = NULL;
 	fifoQueue.len--;
 }
@@ -115,43 +117,35 @@ void oneLevelVMSim(int simType) {
 	unsigned int addr, pageNum, frameNum;
 	char rw;
 	int i, j;
-
+	
 	for (i = 0; i < numProcess; i++) {
-		procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << 20));
+		procTable[i].pageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << 20));
+		initPageTable();
 	}
 	
-	initFirstLevelPageTable();
-	printf("%d\n\n", procTable[0].firstLevelPageTable[3].valid);
+
 	if (simType == 0) { // FIFO
 
 		for (i = 0; i < VIRTUALADDRESSNUM; i++) {
 			for (j = 0; j < numProcess; j++) {
-				printf("i: %d, j: %d\n", i, j);
-
 				fscanf(procTable[j].tracefp, "%x, %c", &addr, &rw);
-				pageNum = addr & 0xfffff000;
+				pageNum = addr >> 12;
 				procTable[j].ntraces++;
 
-				printf("%x, %c, %x\n", addr, rw, pageNum);
-				printf("3232\n");
-				if (procTable[j].firstLevelPageTable[pageNum].valid == 1) {
-
+				if (procTable[j].pageTable[pageNum].valid == 1) {
 					procTable[j].numPageHit++;
 					continue;
 				}
-				printf("444\n");
 				
-				if (fifoQueue.len == nFrame) { // fifoQueue is fulled -> page replacement
-					frameNum = fifoQueue.head->frameNum;
-					fifoQueue.head->valid = 0;
+				if (fifoQueue.len == nFrame) {
+					frameNum = fifoQueue.next->frameNum;
+					fifoQueue.next->valid = 0;
 
 					popFifoQueue();
 					pushFifoQueue(j, pageNum, frameNum);
 				}
-				else { // fifoQueue is not fulled ->
-					printf("222\n");
+				else {
 					pushFifoQueue(j, pageNum, fifoQueue.len);
-					printf("333\n");
 				}
 				procTable[j].numPageFault++;
 			}
@@ -228,7 +222,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	fifoQueue.len = fifoQueue.valid = fifoQueue.frameNum = 0;
-	fifoQueue.head = fifoQueue.tail = fifoQueue.next = NULL;
+	fifoQueue.tail = fifoQueue.next = NULL;
 
 	printf("Num of Frames %d Physical Memory Size %ld bytes\n", nFrame, (1L << phyMemSizeBits));
 	
@@ -243,7 +237,7 @@ int main(int argc, char *argv[]) {
 		printf("=============================================================\n");
 		printf("The One-Level Page Table with LRU Memory Simulation Starts .....\n");
 		printf("=============================================================\n");
-		oneLevelVMSim(simType);
+		// oneLevelVMSim(simType);
 	}
 	
 	if (simType == 2) {
