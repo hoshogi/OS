@@ -211,7 +211,7 @@ void oneLevelVMSim(int simType, int nFrame, int numProcess) {
 	}
 }
 
-void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSizeBits) {
+void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess) {
 	unsigned int addr, pageNum, frameNum, firstPageNum, secondPageNum;
 	int i, secondLevelBits;
 	char rw;
@@ -228,18 +228,18 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 		pageNum = addr >> PAGESIZEBITS;
 		procTable[i].ntraces++;
 
-		firstPageNum = addr >> 32 - firstLevelBits;
+		firstPageNum = addr >> (VIRTUALADDRBITS - firstLevelBits);
 		secondPageNum = addr << firstLevelBits;
-		secondPageNum >>= firstLevelBits + 12;
+		secondPageNum = secondPageNum >> (firstLevelBits + PAGESIZEBITS);
 
-		if (procTable[i].firstLevelPageTable[firstPageNum].valid == 0) { // firstLevelPage의 valid == 0
+		if (procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable == NULL) { // firstLevelPage의 valid == 0 // second level page table이 없다
 			procTable[i].numPageFault++;
 			procTable[i].num2ndLevelPageTable++;
-			procTable[i].firstLevelPageTable[firstPageNum].valid = 1;
 			procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << secondLevelBits));
-			initPageTable(procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable, secondLevelBits);
+			initPageTable(procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable, secondLevelBits); 
+			// firstlevlepage에 맞는 secondlevel page table 생성함
 
-			if (lruList.len == numProcess) { // lrulist가 가득 찼을때 -> replacement
+			if (lruList.len == nFrame) { // lrulist가 가득 찼을때 -> replacement
 				frameNum = lruList.next->frameNum;
 				lruList.next->valid = 0;
 
@@ -250,29 +250,11 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 				pushLruList(&procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable[secondPageNum], lruList.len);
 			}
 		} 
-		else { // firstLevelPage의 valid == 1
-			if (procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable == NULL) { // second table이 없을때 second table 생성
-				procTable[i].numPageFault++;
-				procTable[i].num2ndLevelPageTable++;
-				procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << secondLevelBits));
-				initPageTable(procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable, secondLevelBits);
-
-				if (lruList.len == numProcess) { // lrulist가 가득 찼을때 -> replacement
-					frameNum = lruList.next->frameNum;
-					lruList.next->valid = 0;
-
-					popLruList();
-					pushLruList(&procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable[secondPageNum], frameNum);
-				}
-				else { // lru가 가득 안찼을때 -> 제일 작은 번호대로 채운다
-					pushLruList(&procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable[secondPageNum], lruList.len);
-				}
-			}
-			else { // second table이 있을때 second page 에 접근해서 valid면 hit -> push
+		else {
 				if (procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable[secondPageNum].valid == 0) { // valid 가 0 인경우
 					procTable[i].numPageFault++;
 
-					if (lruList.len == numProcess) { // lrulist가 가득 찼을때 -> replacement
+					if (lruList.len == nFrame) { // lrulist가 가득 찼을때 -> replacement
 						frameNum = lruList.next->frameNum;
 						lruList.next->valid = 0;
 
@@ -285,9 +267,8 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 				}
 				else {
 					procTable[i].numPageHit++;
-					pushLruList(&procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable[secondPageNum], lruList.len);
+					pushLruList(&procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable[secondPageNum], procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable[secondPageNum].frameNum);
 				}
-			}
 		}
 		i = (i + 1) % numProcess;
 	}
@@ -327,7 +308,7 @@ int main(int argc, char *argv[]) {
 	phyMemSizeBits = atoi(argv[3]);
 	optind = 1;
 	numProcess = argc - 4;
-	nFrame = 1 << (phyMemSizeBits - 12);
+	nFrame = 1 << (phyMemSizeBits - PAGESIZEBITS);
 	
 	procTable = (struct procEntry *)malloc(sizeof(struct procEntry) * numProcess);
 	
@@ -373,7 +354,7 @@ int main(int argc, char *argv[]) {
 		printf("=============================================================\n");
 		printf("The Two-Level Page Table Memory Simulation Starts .....\n");
 		printf("=============================================================\n");
-		twoLevelVMSim(firstLevelBits, nFrame, numProcess, phyMemSizeBits);
+		twoLevelVMSim(firstLevelBits, nFrame, numProcess);
 	}
 	
 	if (simType == 3) {
