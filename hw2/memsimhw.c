@@ -77,12 +77,12 @@ void initProcTable() {
 }
 
 void initPageTable() {
-	int i;
+	int i, j;
 
 	for (i = 0; i < numProcess; i++) {
-		for (j = 0; j < (1L << 20); j++) {
+		for (j = 0; j < (1L << VIRTUALADDRBITS - PAGESIZEBITS); j++) {
 			procTable[i].pageTable[j].valid = 0;
-			procTable[i].pageTable[j].frameNum = 0;
+			procTable[i].pageTable[j].frameNum = -1;
 			procTable[i].pageTable[j].len = 0;
 			procTable[i].pageTable[j].next = NULL;
 			procTable[i].pageTable[j].tail = NULL;
@@ -117,21 +117,23 @@ void oneLevelVMSim(int simType) {
 	unsigned int addr, pageNum, frameNum;
 	char rw;
 	int i, j;
+	// int count = 0; // debug
 	
 	for (i = 0; i < numProcess; i++) {
-		procTable[i].pageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << 20));
+		procTable[i].pageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << VIRTUALADDRBITS - PAGESIZEBITS));
 		initPageTable();
 	}
 	
 
 	if (simType == 0) { // FIFO
-
-		for (i = 0; i < VIRTUALADDRESSNUM; i++) {
+		for (i = 0; i < VIRTUALADDRESSNUM; i++) { // VIRTUALADDRESSNUM
 			for (j = 0; j < numProcess; j++) {
-				fscanf(procTable[j].tracefp, "%x, %c", &addr, &rw);
+				fscanf(procTable[j].tracefp, "%x %c", &addr, &rw);
 				pageNum = addr >> 12;
 				procTable[j].ntraces++;
 
+				// printf("process num: %d, pageNum: %x\n", j, pageNum); // debug
+				// printf("valid: %d", procTable[j].pageTable[pageNum].valid);
 				if (procTable[j].pageTable[pageNum].valid == 1) {
 					procTable[j].numPageHit++;
 					continue;
