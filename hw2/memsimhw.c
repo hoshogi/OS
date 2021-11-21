@@ -68,27 +68,12 @@ void initProcTable(int numProcess) {
 	}
 }
 
-void initFirstLevelPageTable(int firstLevelBits, int numProcess) {
-	int i, j;
-
-	for (i = 0; i < numProcess; i++) {
-		for (j = 0; j < (1L << firstLevelBits); j++) {
-			procTable[i].firstLevelPageTable[j].valid = 0;
-			procTable[i].firstLevelPageTable[j].frameNum = -1;
-			procTable[i].firstLevelPageTable[j].len = 0;
-			procTable[i].firstLevelPageTable[j].next = NULL;
-			procTable[i].firstLevelPageTable[j].prev = NULL;
-			procTable[i].firstLevelPageTable[j].secondLevelPageTable = NULL;
-		}
-	}
-}
-
-void initSecondLevelPageTable(struct pageTableEntry* pageTable, int secondLevelBits) {
+void initPageTable(struct pageTableEntry* pageTable, int pageBits) {
 	int i;
 
-	for (i = 0; i < (1L << secondLevelBits); i++) {
+	for (i = 0; i < (1L << pageBits); i++) {
 		pageTable[i].valid = 0;
-		pageTable[i].frameNum = 0;
+		pageTable[i].frameNum = -1;
 		pageTable[i].len = 0;
 		pageTable[i].next = NULL;
 		pageTable[i].prev = NULL;
@@ -166,11 +151,12 @@ void oneLevelVMSim(int simType, int nFrame, int numProcess) {
 	
 	for (i = 0; i < numProcess; i++) {
 		procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << VIRTUALADDRBITS - PAGESIZEBITS));
-		initFirstLevelPageTable(VIRTUALADDRBITS - PAGESIZEBITS, numProcess);
+		initPageTable(procTable[i].firstLevelPageTable, VIRTUALADDRBITS - PAGESIZEBITS);
 	}
 
 	i = 0;
 	while (fscanf(procTable[i].tracefp, "%x %c", &addr, &rw) != EOF) {
+	
 		pageNum = addr >> 12;
 		procTable[i].ntraces++;
 
@@ -232,7 +218,7 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 	secondLevelBits = 20 - firstLevelBits;
 	for (i = 0; i < numProcess; i++) {
 		procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << firstLevelBits));
-		initFirstLevelPageTable(firstLevelBits, numProcess);
+		initPageTable(procTable[i].firstLevelPageTable, firstLevelBits);
 	}
 
 	i = 0;
@@ -249,7 +235,7 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 			procTable[i].num2ndLevelPageTable++;
 			procTable[i].firstLevelPageTable[firstPageNum].valid = 1;
 			procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << secondLevelBits));
-			initSecondLevelPageTable(procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable, secondLevelBits);
+			initPageTable(procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable, secondLevelBits);
 
 			if (lruList.len == numProcess) { // lrulist가 가득 찼을때 -> replacement
 				frameNum = lruList.next->frameNum;
@@ -267,7 +253,7 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 				procTable[i].numPageFault++;
 				procTable[i].num2ndLevelPageTable++;
 				procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << secondLevelBits));
-				initSecondLevelPageTable(procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable, secondLevelBits);
+				initPageTable(procTable[i].firstLevelPageTable[firstPageNum].secondLevelPageTable, secondLevelBits);
 
 				if (lruList.len == numProcess) { // lrulist가 가득 찼을때 -> replacement
 					frameNum = lruList.next->frameNum;
@@ -345,6 +331,7 @@ int main(int argc, char *argv[]) {
 	nFrame = 1 << (phyMemSizeBits - 12);
 	
 	procTable = (struct procEntry *)malloc(sizeof(struct procEntry) * numProcess);
+	
 
 	// initialize procTable for Memory Simulations
 	for(i = 0; i < numProcess; i++) {
