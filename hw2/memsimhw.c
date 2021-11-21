@@ -140,6 +140,8 @@ void popLruList() {
 
 	iter = lruList.next;
 	lruList.next = iter->next;
+	iter->next->prev = &lruList;
+	iter->prev = NULL;
 	iter->next = NULL;
 	lruList.len--;
 }
@@ -156,8 +158,7 @@ void oneLevelVMSim(int simType, int nFrame, int numProcess) {
 
 	i = 0;
 	while (fscanf(procTable[i].tracefp, "%x %c", &addr, &rw) != EOF) {
-	
-		pageNum = addr >> 12;
+		pageNum = addr >> PAGESIZEBITS;
 		procTable[i].ntraces++;
 
 		if (simType == 0) { // FIFO
@@ -215,7 +216,8 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 	int i, secondLevelBits;
 	char rw;
 	
-	secondLevelBits = 20 - firstLevelBits;
+	secondLevelBits = VIRTUALADDRBITS - PAGESIZEBITS - firstLevelBits;
+
 	for (i = 0; i < numProcess; i++) {
 		procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << firstLevelBits));
 		initPageTable(procTable[i].firstLevelPageTable, firstLevelBits);
@@ -223,7 +225,7 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 
 	i = 0;
 	while (fscanf(procTable[i].tracefp, "%x %c", &addr, &rw) != EOF) {
-		pageNum = addr >> 12;
+		pageNum = addr >> PAGESIZEBITS;
 		procTable[i].ntraces++;
 
 		firstPageNum = addr >> 32 - firstLevelBits;
@@ -287,11 +289,8 @@ void twoLevelVMSim(int firstLevelBits, int nFrame, int numProcess, int phyMemSiz
 				}
 			}
 		}
-
 		i = (i + 1) % numProcess;
 	}
-
-
 
 	for(i=0; i < numProcess; i++) {
 		printf("**** %s *****\n",procTable[i].traceName);
