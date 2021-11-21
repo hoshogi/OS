@@ -14,8 +14,6 @@
 #define PAGESIZEBITS 12			// page size = 4Kbytes
 #define VIRTUALADDRBITS 32		// virtual address space size = 4Gbytes
 
-#define VIRTUALADDRESSNUM 1000000
-
 int numProcess;
 int nFrame;
 int firstLevelBits;
@@ -26,8 +24,9 @@ struct pageTableEntry {
 	int frameNum;
 	int len;
 	struct pageTableEntry *next;
-	struct pageTableEntry *tail;
-} fifoQueue;
+	struct pageTableEntry *prev;
+	struct pageTableEntry *secondLevelPageTable;
+} fifoQueue, lruList;
 
 struct procEntry {
 	char *traceName;			// the memory trace name
@@ -40,7 +39,6 @@ struct procEntry {
 	int numPageFault;			// The number of page faults
 	int numPageHit;				// The number of page hits
 	struct pageTableEntry *firstLevelPageTable;
-	struct pageTableEntry *pageTable;
 	FILE *tracefp;
 } *procTable;
 
@@ -72,34 +70,34 @@ void initProcTable() {
 		procTable[i].numPageFault = 0;
 		procTable[i].numPageHit = 0;			
 		procTable[i].firstLevelPageTable = NULL;
-		procTable[i].pageTable = NULL;
 	}
 }
 
-void initPageTable() {
+void initFirstLevelPageTable() {
 	int i, j;
 
 	for (i = 0; i < numProcess; i++) {
 		for (j = 0; j < (1L << VIRTUALADDRBITS - PAGESIZEBITS); j++) {
-			procTable[i].pageTable[j].valid = 0;
-			procTable[i].pageTable[j].frameNum = -1;
-			procTable[i].pageTable[j].len = 0;
-			procTable[i].pageTable[j].next = NULL;
-			procTable[i].pageTable[j].tail = NULL;
+			procTable[i].firstLevelPageTable[j].valid = 0;
+			procTable[i].firstLevelPageTable[j].frameNum = -1;
+			procTable[i].firstLevelPageTable[j].len = 0;
+			procTable[i].firstLevelPageTable[j].next = NULL;
+			procTable[i].firstLevelPageTable[j].prev = NULL;
+			procTable[i].firstLevelPageTable[j].secondLevelPageTable = NULL;
 		}
 	}
 }
 
 void pushFifoQueue(int procNum, int pageNum, int frameNum) {
-	procTable[procNum].pageTable[pageNum].valid = 1;
-	procTable[procNum].pageTable[pageNum].frameNum = frameNum;
+	procTable[procNum].firstLevelPageTable[pageNum].valid = 1;
+	procTable[procNum].firstLevelPageTable[pageNum].frameNum = frameNum;
 
 	if (fifoQueue.len == 0) {
-		fifoQueue.next = fifoQueue.tail = &procTable[procNum].pageTable[pageNum];
+		fifoQueue.next = fifoQueue.prev = &procTable[procNum].firstLevelPageTable[pageNum];
 	}
 	else {
-		fifoQueue.tail->next = &procTable[procNum].pageTable[pageNum];
-		fifoQueue.tail = &procTable[procNum].pageTable[pageNum];
+		fifoQueue.prev->next = &procTable[procNum].firstLevelPageTable[pageNum];
+		fifoQueue.prev = &procTable[procNum].firstLevelPageTable[pageNum];
 	}
 	fifoQueue.len++;
 }
@@ -113,48 +111,105 @@ void popFifoQueue() {
 	fifoQueue.len--;
 }
 
+
+void pushLruList(int procNum, int pageNum, int frameNum) {
+	int valid;
+
+	valid = procTable[procNum].firstLevelPageTable[pageNum].valid;
+	procTable[procNum].firstLevelPageTable[pageNum].frameNum = frameNum;
+
+	if (valid == 0) {
+		if (lruList.len == 0) {
+			lruList.next = lruList.prev = &procTable[procNum].firstLevelPageTable[pageNum];
+			procTable[procNum].firstLevelPageTable[pageNum].prev = procTable[procNum].firstLevelPageTable[pageNum].next = &lruList;
+		}
+		else {
+			lruList.prev->next = &procTable[procNum].firstLevelPageTable[pageNum];
+			procTable[procNum].firstLevelPageTable[pageNum].prev = lruList.prev;
+			lruList.prev = &procTable[procNum].firstLevelPageTable[pageNum];
+			procTable[procNum].firstLevelPageTable[pageNum].next = &lruList;
+		}
+
+		procTable[procNum].firstLevelPageTable[pageNum].valid = 1;
+		lruList.len++;
+	} 
+	else if (valid == 1) {
+		procTable[procNum].firstLevelPageTable[pageNum].prev->next = procTable[procNum].firstLevelPageTable[pageNum].next;
+		procTable[procNum].firstLevelPageTable[pageNum].next->prev = procTable[procNum].firstLevelPageTable[pageNum].prev;
+		lruList.prev->next = &procTable[procNum].firstLevelPageTable[pageNum];
+		procTable[procNum].firstLevelPageTable[pageNum].prev = lruList.prev;
+		lruList.prev = &procTable[procNum].firstLevelPageTable[pageNum];
+		procTable[procNum].firstLevelPageTable[pageNum].next = &lruList;
+	}
+}
+
+void popLruList() {
+	struct pageTableEntry* iter;
+
+	iter = lruList.next;
+	lruList.next = iter->next;
+	iter->next = NULL;
+	lruList.len--;
+}
+
 void oneLevelVMSim(int simType) {
 	unsigned int addr, pageNum, frameNum;
 	char rw;
-	int i, j;
-	// int count = 0; // debug
+	int i;
 	
 	for (i = 0; i < numProcess; i++) {
-		procTable[i].pageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << VIRTUALADDRBITS - PAGESIZEBITS));
-		initPageTable();
+		procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1L << VIRTUALADDRBITS - PAGESIZEBITS));
+		initFirstLevelPageTable();
 	}
-	
 
-	if (simType == 0) { // FIFO
-		for (i = 0; i < VIRTUALADDRESSNUM; i++) { // VIRTUALADDRESSNUM
-			for (j = 0; j < numProcess; j++) {
-				fscanf(procTable[j].tracefp, "%x %c", &addr, &rw);
-				pageNum = addr >> 12;
-				procTable[j].ntraces++;
+	i = 0;
+	while (fscanf(procTable[i].tracefp, "%x %c", &addr, &rw) != EOF) {
+		if (simType == 0) { // FIFO
+			pageNum = addr >> 12;
+			procTable[i].ntraces++;
 
-				// printf("process num: %d, pageNum: %x\n", j, pageNum); // debug
-				// printf("valid: %d", procTable[j].pageTable[pageNum].valid);
-				if (procTable[j].pageTable[pageNum].valid == 1) {
-					procTable[j].numPageHit++;
-					continue;
-				}
-				
-				if (fifoQueue.len == nFrame) {
-					frameNum = fifoQueue.next->frameNum;
-					fifoQueue.next->valid = 0;
+			if (procTable[i].firstLevelPageTable[pageNum].valid == 1) {
+				procTable[i].numPageHit++;
+				i = (i + 1) % numProcess;
+				continue;
+			}
+			
+			if (fifoQueue.len == nFrame) {
+				frameNum = fifoQueue.next->frameNum;
+				fifoQueue.next->valid = 0;
 
-					popFifoQueue();
-					pushFifoQueue(j, pageNum, frameNum);
+				popFifoQueue();
+				pushFifoQueue(i, pageNum, frameNum);
+			}
+			else {
+				pushFifoQueue(i, pageNum, fifoQueue.len);
+			}
+			procTable[i].numPageFault++;
+		} 
+
+		else if (simType == 1) { // LRU
+			pageNum = addr >> 12;
+			procTable[i].ntraces++;
+
+			if (procTable[i].firstLevelPageTable[pageNum].valid == 1) {
+				procTable[i].numPageHit++;
+				pushLruList(i, pageNum, procTable[i].firstLevelPageTable[pageNum].frameNum);
+			}
+			else {
+				if (lruList.len == nFrame) {
+					frameNum = lruList.next->frameNum;
+					lruList.next->valid = 0;
+
+					popLruList();
+					pushLruList(i, pageNum, frameNum);
 				}
-				else {
-					pushFifoQueue(j, pageNum, fifoQueue.len);
+				else {	
+					pushLruList(i, pageNum, lruList.len);
 				}
-				procTable[j].numPageFault++;
+				procTable[i].numPageFault++;
 			}
 		}
-	}
-	else if (simType == 1) { // LRU
-
+		i = (i + 1) % numProcess;
 	}
 
 	for(i = 0; i < numProcess; i++) {
@@ -166,7 +221,7 @@ void oneLevelVMSim(int simType) {
 	}
 }
 
-// void twoLevelVMSim(...) {
+// void twoLevelVMSim() {
 	
 // 	for(i=0; i < numProcess; i++) {
 // 		printf("**** %s *****\n",procTable[i].traceName);
@@ -178,7 +233,7 @@ void oneLevelVMSim(int simType) {
 // 	}
 // }
 
-// void invertedPageVMSim(...) {
+// void invertedPageVMSim() {
 
 // 	for(i=0; i < numProcess; i++) {
 // 		printf("**** %s *****\n",procTable[i].traceName);
@@ -224,7 +279,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	fifoQueue.len = fifoQueue.valid = fifoQueue.frameNum = 0;
-	fifoQueue.tail = fifoQueue.next = NULL;
+	fifoQueue.prev = fifoQueue.next = fifoQueue.secondLevelPageTable = NULL;
+	lruList.len = lruList.valid = lruList.frameNum = 0;
+	lruList.prev = lruList.next = lruList.secondLevelPageTable = NULL;
 
 	printf("Num of Frames %d Physical Memory Size %ld bytes\n", nFrame, (1L << phyMemSizeBits));
 	
@@ -239,7 +296,7 @@ int main(int argc, char *argv[]) {
 		printf("=============================================================\n");
 		printf("The One-Level Page Table with LRU Memory Simulation Starts .....\n");
 		printf("=============================================================\n");
-		// oneLevelVMSim(simType);
+		oneLevelVMSim(simType);
 	}
 	
 	if (simType == 2) {
