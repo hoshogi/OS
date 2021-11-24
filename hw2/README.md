@@ -1,0 +1,5 @@
+![Homework2-1](https://user-images.githubusercontent.com/71253970/143236388-196fd3af-e360-4b9e-b851-31c874497765.png)
+![Homework2-2](https://user-images.githubusercontent.com/71253970/143236393-ec021482-915a-4e66-8777-1b71c77123e3.png)
+![Homework2-3](https://user-images.githubusercontent.com/71253970/143236396-46dc08b9-430c-4f61-be6b-e0bdd0c8e58d.png)
+![Homework2-4](https://user-images.githubusercontent.com/71253970/143236400-0c5656bb-b2d2-4256-a374-5e707b9e925a.png)
+![Homework2-5](https://user-images.githubusercontent.com/71253970/143236401-80c6b3b4-054e-4cf5-b51f-f8cb50dbb168.png)
